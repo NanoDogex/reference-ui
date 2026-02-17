@@ -30,7 +30,6 @@ load_dotenv()
 # Replace hardcoded values with environment variables
 redis_url = os.getenv('REDIS_URL')
 redis_client = redis.from_url(redis_url, decode_responses=True)
-)
 
 # Remove hardcoded bot token
 BOT_TOKEN = os.getenv('BOT_TOKEN')
