@@ -28,10 +28,8 @@ def load_user_data():
 load_dotenv()
 
 # Replace hardcoded values with environment variables
-redis_client = redis.Redis(
-    host=os.getenv('REDIS_HOST'),
-    port=int(os.getenv('REDIS_PORT')),
-    password=os.getenv('REDIS_PASSWORD')
+redis_url = os.getenv('REDIS_URL')
+redis_client = redis.from_url(redis_url, decode_responses=True)
 )
 
 # Remove hardcoded bot token
