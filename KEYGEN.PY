@@ -12,14 +12,14 @@ from telegram.constants import ParseMode
 from telegram.error import BadRequest
 
 # Bot configuration
-BOT_TOKEN = "7787758054:AAGYh_NE_3pWp5VgQggbHS0U2VaVu-ZzPuU"  # Replace with your bot token
+BOT_TOKEN = "7988655443:AAGTzmY7gJCBX6mP8rLvsz6Z7QRoCCOjvQk"  # Replace with your bot token
 
 # Channel to be joined for verification
-CHANNEL_USERNAME = "hecabruss"
-CHANNEL_LINK = "https://t.me/hecabruss"
+CHANNEL_USERNAME = "ghostgpt5"
+CHANNEL_LINK = "https://t.me/ghostgpt5"
 
 # Admin user to receive notifications
-ADMIN_ID = 123456789  # Replace with your Telegram ID
+ADMIN_ID = 8087130352  # Replace with your Telegram ID
 
 # Image URLs (direct image links for better performance)
 VERIFICATION_IMAGE = "https://i.imgur.com/x1CcmOw.jpeg"  # Replace with direct image URL
