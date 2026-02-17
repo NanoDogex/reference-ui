@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 import telegram
 
 app = Flask(__name__)
-CORS(app, origins=[os.getenv('FRONTEND_URL')])
+CORS(app)
 load_dotenv()
 
 # Get the absolute path to user_data.json from Telegram bot
