@@ -1,0 +1,4 @@
+grep -RIn --exclude-dir={node_modules,.git,dist} "localhost" .
+grep -RIn --exclude-dir={node_modules,.git,dist} "127.0.0.1" .
+grep -RIn --exclude-dir={node_modules,.git,dist} "http://" .
+

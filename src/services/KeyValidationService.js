@@ -5,7 +5,7 @@ import { userService } from './User.service';
 class KeyValidationService {
     constructor() {
         this.STORAGE_KEY = 'wormgpt_access_key';
-        this.BASE_URL = 'http://localhost:5000';
+        this.BASE_URL = import.meta.env.VITE_API_URL;
     }
 
     validateKeyFormat(key) {
