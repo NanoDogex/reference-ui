@@ -210,3 +210,6 @@ __pycache__/
 
 # Dependencies
 node_modules/
+*.env
+*.txt
+*.json

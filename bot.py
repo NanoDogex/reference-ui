@@ -8,9 +8,17 @@ import logging
 from datetime import timedelta
 from collections import defaultdict
 
-from telegram import Update, Bot, InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto
-from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes, MessageHandler, filters
-from telegram.constants import ParseMode
+from telegram import (
+    Update,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+)
+from telegram.ext import (
+    Application,
+    CommandHandler,
+    CallbackQueryHandler,
+    ContextTypes,
+)
 from telegram.error import BadRequest
 
 # ===============================
@@ -68,15 +76,15 @@ def is_rate_limited(user_id):
 # ===============================
 
 if os.path.exists(USER_DATA_FILE):
-    with open(USER_DATA_FILE, 'r') as f:
+    with open(USER_DATA_FILE, "r") as f:
         user_data = json.load(f)
 else:
     user_data = {}
 
 
 def save_user_data():
-    with open(USER_DATA_FILE, 'w') as f:
-        json.dump(user_data, f)
+    with open(USER_DATA_FILE, "w") as f:
+        json.dump(user_data, f, indent=2)
 
 
 # ===============================
@@ -84,14 +92,14 @@ def save_user_data():
 # ===============================
 
 def generate_key():
-    return "GHOST-" + ''.join(
+    return "GHOST-" + "".join(
         random.choices(string.ascii_uppercase + string.digits, k=10)
     )
 
 
-def get_expiry_time():
+def get_expiry_time(days=1):
     return (
-        datetime.datetime.now() + timedelta(days=1)
+        datetime.datetime.now() + timedelta(days=days)
     ).strftime("%Y-%m-%d %H:%M:%S")
 
 
@@ -117,11 +125,13 @@ def get_user_data(user_id):
             "expiry_time": None,
             "total_keys_generated": 0,
             "first_seen": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "last_active": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            "last_active": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         }
         save_user_data()
 
-    user_data[user_id]["last_active"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    user_data[user_id]["last_active"] = datetime.datetime.now().strftime(
+        "%Y-%m-%d %H:%M:%S"
+    )
     save_user_data()
 
     return user_data[user_id]
@@ -134,13 +144,13 @@ def get_user_data(user_id):
 async def check_channel_membership(bot, user_id):
     try:
         member = await bot.get_chat_member(f"@{CHANNEL_USERNAME}", user_id)
-        return member.status in ['member', 'administrator', 'creator']
+        return member.status in ["member", "administrator", "creator"]
     except BadRequest:
         return False
 
 
 # ===============================
-# WRAP RATE LIMIT INTO HANDLERS
+# RATE LIMIT WRAPPER
 # ===============================
 
 async def protected_action(update: Update):
@@ -155,10 +165,6 @@ async def protected_action(update: Update):
 
 
 # ===============================
-# EXISTING CODE CONTINUES BELOW
-# (No logic removed — only rate protection injected where needed)
-# ===============================
-# ===============================
 # START COMMAND
 # ===============================
 
@@ -172,14 +178,13 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
         [InlineKeyboardButton("🔐 Generate Key", callback_data="generate_key")],
         [InlineKeyboardButton("📊 My Status", callback_data="status")],
-        [InlineKeyboardButton("📢 Join Channel", url=CHANNEL_LINK)]
+        [InlineKeyboardButton("📢 Join Channel", url=CHANNEL_LINK)],
     ]
 
     await update.message.reply_text(
         f"👻 Welcome {user.first_name}!\n\n"
-        f"Access the system by generating your key.\n"
-        f"You must join @{CHANNEL_USERNAME} first.",
-        reply_markup=InlineKeyboardMarkup(keyboard)
+        f"You must join @{CHANNEL_USERNAME} before generating a key.",
+        reply_markup=InlineKeyboardMarkup(keyboard),
     )
 
 
@@ -203,9 +208,9 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not is_member:
             await query.edit_message_text(
                 "🚫 You must join the channel first.",
-                reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton("📢 Join Channel", url=CHANNEL_LINK)]
-                ])
+                reply_markup=InlineKeyboardMarkup(
+                    [[InlineKeyboardButton("📢 Join Channel", url=CHANNEL_LINK)]]
+                ),
             )
             return
 
@@ -224,7 +229,6 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         data["expiry_time"] = expiry
         data["total_keys_generated"] += 1
         data["verified"] = True
-
         save_user_data()
 
         await query.edit_message_text(
@@ -233,7 +237,6 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"⏳ Expires: {expiry}"
         )
 
-        # Notify admin
         try:
             await context.bot.send_message(
                 ADMIN_ID,
@@ -246,10 +249,11 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     elif query.data == "status":
 
-        if data["key"] and not is_key_expired(data["expiry_time"]):
-            status = "🟢 Active"
-        else:
-            status = "🔴 Expired / None"
+        status = (
+            "🟢 Active"
+            if data["key"] and not is_key_expired(data["expiry_time"])
+            else "🔴 Expired / None"
+        )
 
         await query.edit_message_text(
             f"📊 Your Status\n\n"
@@ -279,28 +283,21 @@ async def upgrade_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     new_key = generate_key()
-    expiry = (
-        datetime.datetime.now() + timedelta(days=30)
-    ).strftime("%Y-%m-%d %H:%M:%S")
+    expiry = get_expiry_time(days=30)
 
     user_data[target_id]["key"] = new_key
     user_data[target_id]["expiry_time"] = expiry
     user_data[target_id]["verified"] = True
-
     save_user_data()
 
     await update.message.reply_text(
-        f"✅ User upgraded.\n\n"
-        f"🔑 {new_key}\n"
-        f"⏳ {expiry}"
+        f"✅ User upgraded.\n\n🔑 {new_key}\n⏳ {expiry}"
     )
 
     try:
         await context.bot.send_message(
             int(target_id),
-            f"🎉 You have been upgraded!\n\n"
-            f"🔑 {new_key}\n"
-            f"⏳ Expires: {expiry}"
+            f"🎉 You have been upgraded!\n\n🔑 {new_key}\n⏳ Expires: {expiry}"
         )
     except:
         pass
@@ -327,9 +324,9 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # MAIN
 # ===============================
 
-def main():
+async def main():
     if not BOT_TOKEN:
-        raise ValueError("BOT_TOKEN is not set in environment variables")
+        raise ValueError("BOT_TOKEN is not set")
 
     app = Application.builder().token(BOT_TOKEN).build()
 
@@ -338,8 +335,8 @@ def main():
     app.add_handler(CommandHandler("stats", stats_command))
     app.add_handler(CallbackQueryHandler(button_callback))
 
-    app.run_polling()
+    await app.run_polling()
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
