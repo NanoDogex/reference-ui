@@ -76,3 +76,4 @@ services:
     name: ghostgpt-redis
     plan: free
     maxmemoryPolicy: allkeys-lru
+    ipAllowList: []
