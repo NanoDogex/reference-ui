@@ -319,7 +319,7 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"🟢 Active Keys: {active_keys}"
     )
 
-def main():
+async def main():
     if not BOT_TOKEN:
         raise ValueError("BOT_TOKEN is not set")
 
@@ -330,8 +330,10 @@ def main():
     app.add_handler(CommandHandler("stats", stats_command))
     app.add_handler(CallbackQueryHandler(button_callback))
 
-    app.run_polling()
+    await app.run_polling()
 
 
 if __name__ == "__main__":
+    import asyncio
+    asyncio.run(main())
     main()
