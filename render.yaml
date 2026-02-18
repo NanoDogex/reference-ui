@@ -1,17 +1,68 @@
-services:
-  - type: web
-    name: telegram-bot-api
-    env: python
-    plan: free
-    buildCommand: pip install -r api/requirements.txt
-    startCommand: gunicorn --chdir api server:app
-    autoDeploy: true
-    envVars:
-      - key: REDIS_URL
-        fromService:
-          type: redis
-          name: Ghost-redis
-          property: connectionString
+# Exported for GhostGPT
+version: "1"
 
-      - key: BOT_TOKEN
-        sync: false
+projects:
+  - name: ghostgpt
+
+    environments:
+      - name: Production
+
+        services:
+
+          # =========================
+          # 🌐 FRONTEND (VITE STATIC)
+          # =========================
+          - type: web
+            name: ghostgpt-frontend
+            runtime: static
+            repo: https://github.com/NanoDogex/reference-ui
+            buildCommand: npm install && npm run build
+            staticPublishPath: src/dist
+            autoDeployTrigger: commit
+
+          # =========================
+          # 👻 TELEGRAM POLLING BOT
+          # =========================
+          - type: worker
+            name: ghostgpt-bot
+            runtime: python
+            repo: https://github.com/NanoDogex/reference-ui
+            plan: starter
+            region: oregon
+            buildCommand: pip install -r requirements.txt
+            startCommand: python bot.py
+            envVars:
+              - key: BOT_TOKEN
+                sync: false
+            autoDeployTrigger: commit
+
+          # =========================
+          # 🔥 BACKEND API (GUNICORN)
+          # =========================
+          - type: web
+            name: ghostgpt-api
+            runtime: python
+            repo: https://github.com/NanoDogex/reference-ui
+            plan: starter
+            region: oregon
+            buildCommand: pip install -r api/requirements.txt
+            startCommand: gunicorn --chdir api service:app
+            envVars:
+              - key: BOT_TOKEN
+                sync: false
+              - key: REDIS_URL
+                fromService:
+                  name: ghostgpt-redis
+                  type: keyvalue
+                  property: connectionString
+            autoDeployTrigger: commit
+
+          # =========================
+          # ⚡ REDIS CACHE
+          # =========================
+          - type: keyvalue
+            name: ghostgpt-redis
+            plan: free
+            region: oregon
+            maxmemoryPolicy: allkeys-lru
+            ipAllowList: []
