@@ -7,12 +7,9 @@ import datetime
 import logging
 from datetime import timedelta
 from collections import defaultdict
+from pathlib import Path
 
-from telegram import (
-    Update,
-    InlineKeyboardButton,
-    InlineKeyboardMarkup,
-)
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -31,13 +28,16 @@ CHANNEL_USERNAME = "ghostgpt5"
 CHANNEL_LINK = "https://t.me/ghostgpt5"
 
 ADMIN_ID = 8087130352
+USER_DATA_FILE = Path("user_data.json")
 
-USER_DATA_FILE = "user_data.json"
-
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    format="%(asctime)s | %(levelname)s | %(message)s",
+    level=logging.INFO,
+)
+logger = logging.getLogger(__name__)
 
 # ===============================
-# RATE LIMIT (Anti-DDoS)
+# RATE LIMIT
 # ===============================
 
 RATE_LIMIT_SECONDS = 3
@@ -50,13 +50,11 @@ user_action_count = defaultdict(list)
 def is_rate_limited(user_id):
     now = datetime.datetime.now()
 
-    # Per 3 seconds
     if user_id in user_last_action:
         delta = (now - user_last_action[user_id]).total_seconds()
         if delta < RATE_LIMIT_SECONDS:
             return True
 
-    # Per minute limit
     user_action_count[user_id] = [
         t for t in user_action_count[user_id]
         if (now - t).total_seconds() < 60
@@ -67,29 +65,31 @@ def is_rate_limited(user_id):
 
     user_last_action[user_id] = now
     user_action_count[user_id].append(now)
-
     return False
 
 
 # ===============================
-# LOAD USER DATA
+# USER DATA
 # ===============================
 
-if os.path.exists(USER_DATA_FILE):
-    with open(USER_DATA_FILE, "r") as f:
-        user_data = json.load(f)
-else:
-    user_data = {}
+def load_user_data():
+    if USER_DATA_FILE.exists():
+        try:
+            with open(USER_DATA_FILE, "r") as f:
+                return json.load(f)
+        except Exception:
+            logger.warning("Corrupted user_data.json — resetting.")
+            return {}
+    return {}
+
+
+user_data = load_user_data()
 
 
 def save_user_data():
     with open(USER_DATA_FILE, "w") as f:
         json.dump(user_data, f, indent=2)
 
-
-# ===============================
-# KEY SYSTEM
-# ===============================
 
 def generate_key():
     return "GHOST-" + "".join(
@@ -127,18 +127,17 @@ def get_user_data(user_id):
             "first_seen": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             "last_active": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         }
-        save_user_data()
 
     user_data[user_id]["last_active"] = datetime.datetime.now().strftime(
         "%Y-%m-%d %H:%M:%S"
     )
-    save_user_data()
 
+    save_user_data()
     return user_data[user_id]
 
 
 # ===============================
-# MEMBERSHIP CHECK
+# HELPERS
 # ===============================
 
 async def check_channel_membership(bot, user_id):
@@ -149,23 +148,19 @@ async def check_channel_membership(bot, user_id):
         return False
 
 
-# ===============================
-# RATE LIMIT WRAPPER
-# ===============================
-
 async def protected_action(update: Update):
     user_id = update.effective_user.id
     if is_rate_limited(user_id):
         try:
             await update.effective_message.reply_text("⏳ Please slow down.")
-        except:
+        except Exception:
             pass
         return True
     return False
 
 
 # ===============================
-# START COMMAND
+# COMMANDS
 # ===============================
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -173,7 +168,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     user = update.effective_user
-    data = get_user_data(user.id)
+    get_user_data(user.id)
 
     keyboard = [
         [InlineKeyboardButton("🔐 Generate Key", callback_data="generate_key")],
@@ -187,10 +182,6 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=InlineKeyboardMarkup(keyboard),
     )
 
-
-# ===============================
-# BUTTON HANDLER
-# ===============================
 
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if await protected_action(update):
@@ -237,87 +228,10 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"⏳ Expires: {expiry}"
         )
 
-        try:
-            await context.bot.send_message(
-                ADMIN_ID,
-                f"📥 New Key Generated\n\n"
-                f"👤 User: {user.id}\n"
-                f"🔑 {new_key}"
-            )
-        except:
-            pass
-
-    elif query.data == "status":
-
-        status = (
-            "🟢 Active"
-            if data["key"] and not is_key_expired(data["expiry_time"])
-            else "🔴 Expired / None"
-        )
-
-        await query.edit_message_text(
-            f"📊 Your Status\n\n"
-            f"🔐 Key: {data['key']}\n"
-            f"⏳ Expiry: {data['expiry_time']}\n"
-            f"📈 Total Generated: {data['total_keys_generated']}\n"
-            f"📌 Status: {status}"
-        )
-
 
 # ===============================
-# ADMIN COMMANDS
+# MAIN (MANUAL LIFECYCLE)
 # ===============================
-
-async def upgrade_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id != ADMIN_ID:
-        return
-
-    if len(context.args) != 1:
-        await update.message.reply_text("Usage: /upgrade <user_id>")
-        return
-
-    target_id = context.args[0]
-
-    if target_id not in user_data:
-        await update.message.reply_text("User not found.")
-        return
-
-    new_key = generate_key()
-    expiry = get_expiry_time(days=30)
-
-    user_data[target_id]["key"] = new_key
-    user_data[target_id]["expiry_time"] = expiry
-    user_data[target_id]["verified"] = True
-    save_user_data()
-
-    await update.message.reply_text(
-        f"✅ User upgraded.\n\n🔑 {new_key}\n⏳ {expiry}"
-    )
-
-    try:
-        await context.bot.send_message(
-            int(target_id),
-            f"🎉 You have been upgraded!\n\n🔑 {new_key}\n⏳ Expires: {expiry}"
-        )
-    except:
-        pass
-
-
-async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id != ADMIN_ID:
-        return
-
-    total_users = len(user_data)
-    active_keys = sum(
-        1 for u in user_data.values()
-        if u["key"] and not is_key_expired(u["expiry_time"])
-    )
-
-    await update.message.reply_text(
-        f"📊 Bot Stats\n\n"
-        f"👥 Total Users: {total_users}\n"
-        f"🟢 Active Keys: {active_keys}"
-    )
 
 async def main():
     if not BOT_TOKEN:
@@ -326,14 +240,22 @@ async def main():
     app = Application.builder().token(BOT_TOKEN).build()
 
     app.add_handler(CommandHandler("start", start_command))
-    app.add_handler(CommandHandler("upgrade", upgrade_user))
-    app.add_handler(CommandHandler("stats", stats_command))
     app.add_handler(CallbackQueryHandler(button_callback))
 
-    await app.run_polling()
+    logger.info("👻 GhostGPT KeyGen Bot starting...")
+
+    await app.initialize()
+    await app.start()
+    await app.updater.start_polling()
+
+    try:
+        await asyncio.Event().wait()  # run forever
+    finally:
+        logger.info("Shutting down...")
+        await app.updater.stop()
+        await app.stop()
+        await app.shutdown()
 
 
 if __name__ == "__main__":
-    import asyncio
     asyncio.run(main())
-    main()
