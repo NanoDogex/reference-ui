@@ -4,6 +4,7 @@ import random
 import string
 import logging
 import datetime
+import asyncio
 from datetime import timedelta
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
@@ -25,8 +26,6 @@ if not BOT_TOKEN:
     raise ValueError("BOT_TOKEN environment variable not set")
 
 ADMIN_ID = int(os.getenv("ADMIN_ID", "0"))
-CHANNEL_USERNAME = os.getenv("CHANNEL_USERNAME", "ghostgpt5")
-
 USER_DATA_FILE = "user_data.json"
 
 logging.basicConfig(level=logging.INFO)
@@ -76,7 +75,7 @@ def get_user(user_id):
 
     if user_id not in user_data:
         user_data[user_id] = {
-            "verified": False,
+            "tier": "free",
             "key": None,
             "expiry_time": None,
             "total_keys_generated": 0,
@@ -99,9 +98,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
     await update.message.reply_text(
-        "👻 *Welcome to GhostGPT KeyGen*\n\n"
-        "Generate secure 24-hour trial access keys.\n"
-        "Upgrade options coming soon.",
+        "👻 *GhostGPT KeyGen*\n\nGenerate secure 24-hour keys.",
         parse_mode="Markdown",
         reply_markup=keyboard,
     )
@@ -113,17 +110,15 @@ async def generate(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     user = get_user(query.from_user.id)
 
-    # If active key exists
     if user["key"] and not is_key_expired(user["expiry_time"]):
         await query.message.reply_text(
             f"🔑 *Your Active Key*\n\n"
-            f"`{user['key']}`\n\n"
+            f"`{user['key']}`\n"
             f"Valid until: {user['expiry_time']}",
             parse_mode="Markdown",
         )
         return
 
-    # Generate new key
     key = generate_key()
     expiry = get_expiry_time()
 
@@ -134,8 +129,7 @@ async def generate(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await query.message.reply_text(
         f"✅ *Key Generated!*\n\n"
-        f"`{key}`\n\n"
-        f"Expires: {expiry}",
+        f"`{key}`\nExpires: {expiry}",
         parse_mode="Markdown",
     )
 
@@ -151,7 +145,6 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
 
     user = get_user(query.from_user.id)
-
     active = user["key"] and not is_key_expired(user["expiry_time"])
 
     await query.message.reply_text(
@@ -171,26 +164,25 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await stats(update, context)
 
 
-async def text_redirect(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await start(update, context)
-
-
 # ==============================
-# MAIN
+# PROPER ASYNC MAIN (FIX)
 # ==============================
 
-def main():
+async def main():
     application = Application.builder().token(BOT_TOKEN).build()
 
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CallbackQueryHandler(callback_handler))
-    application.add_handler(
-        MessageHandler(filters.TEXT & ~filters.COMMAND, text_redirect)
-    )
 
-    logging.info("👻 GhostGPT KeyGen is running...")
-    application.run_polling()
+    logging.info("👻 GhostGPT running...")
+
+    await application.initialize()
+    await application.start()
+    await application.updater.start_polling()
+
+    # keep running forever
+    await asyncio.Event().wait()
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
