@@ -1,68 +1,78 @@
-# Exported for GhostGPT
-version: "1"
+previews:
+  generation: automatic
 
-projects:
-  - name: ghostgpt
+services:
 
-    environments:
-      - name: Production
+  # =========================
+  # 🌐 FRONTEND (STATIC VITE)
+  # =========================
+  - type: web
+    name: ghostgpt-frontend
+    runtime: static
+    repo: https://github.com/NanoDogex/reference-ui
+    branch: main
+    buildCommand: npm install && npm run build
+    staticPublishPath: src/dist
+    autoDeployTrigger: commit
+    envVars:
+      - key: VITE_WEAVIATE_URL
+        sync: false
+      - key: VITE_WEAVIATE_API_KEY
+        sync: false
+      - key: VITE_SUPABASE_URL
+        sync: false
+      - key: VITE_SUPABASE_API_KEY
+        sync: false
+      - key: VITE_API_URL
+        sync: false
 
-        services:
+  # =========================
+  # 👻 TELEGRAM POLLING BOT
+  # =========================
+  - type: worker
+    name: ghostgpt-bot
+    runtime: python
+    repo: https://github.com/NanoDogex/reference-ui
+    branch: main
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: python bot.py
+    autoDeployTrigger: commit
+    envVars:
+      - key: BOT_TOKEN
+        sync: false
+      - key: ADMIN_ID
+        sync: false
+      - key: CHANNEL_USERNAME
+        sync: false
 
-          # =========================
-          # 🌐 FRONTEND (VITE STATIC)
-          # =========================
-          - type: web
-            name: ghostgpt-frontend
-            runtime: static
-            repo: https://github.com/NanoDogex/reference-ui
-            buildCommand: npm install && npm run build
-            staticPublishPath: src/dist
-            autoDeployTrigger: commit
+  # =========================
+  # 🔥 API SERVICE (GUNICORN)
+  # =========================
+  - type: web
+    name: ghostgpt-api
+    runtime: python
+    repo: https://github.com/NanoDogex/reference-ui
+    branch: main
+    plan: free
+    buildCommand: pip install -r api/requirements.txt
+    startCommand: gunicorn --chdir api service:app
+    autoDeployTrigger: commit
+    envVars:
+      - key: BOT_TOKEN
+        sync: false
+      - key: GOOGLE_API_KEY
+        sync: false
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: ghostgpt-redis
+          property: connectionString
 
-          # =========================
-          # 👻 TELEGRAM POLLING BOT
-          # =========================
-          - type: worker
-            name: ghostgpt-bot
-            runtime: python
-            repo: https://github.com/NanoDogex/reference-ui
-            plan: starter
-            region: oregon
-            buildCommand: pip install -r requirements.txt
-            startCommand: python bot.py
-            envVars:
-              - key: BOT_TOKEN
-                sync: false
-            autoDeployTrigger: commit
-
-          # =========================
-          # 🔥 BACKEND API (GUNICORN)
-          # =========================
-          - type: web
-            name: ghostgpt-api
-            runtime: python
-            repo: https://github.com/NanoDogex/reference-ui
-            plan: starter
-            region: oregon
-            buildCommand: pip install -r api/requirements.txt
-            startCommand: gunicorn --chdir api service:app
-            envVars:
-              - key: BOT_TOKEN
-                sync: false
-              - key: REDIS_URL
-                fromService:
-                  name: ghostgpt-redis
-                  type: keyvalue
-                  property: connectionString
-            autoDeployTrigger: commit
-
-          # =========================
-          # ⚡ REDIS CACHE
-          # =========================
-          - type: keyvalue
-            name: ghostgpt-redis
-            plan: free
-            region: oregon
-            maxmemoryPolicy: allkeys-lru
-            ipAllowList: []
+  # =========================
+  # ⚡ REDIS
+  # =========================
+  - type: keyvalue
+    name: ghostgpt-redis
+    plan: free
+    maxmemoryPolicy: allkeys-lru
